@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <title>Hex-A star tutorial</title>
+  <script>
+    class HexTile {
+      constructor(obstacle, x, y){
+        //attributes
+        this.obstacle = obstacle;
+        this.x = x;
+        this.y = y;
+        this.path = false;
+        //이웃 셀
+        this.leftTop = null;
+        this.top = null;
+        this.rightTop = null;
+        this.leftBottom = null;
+        this.bottom = null;
+        this.rightBottom = null;
+
+        //path에 사용
+        this.prevTile = null;
+        this.nextTile = null;
+      }
+    }
+
+    class Path {
+      constructor(startTile, endTile){
+        this.startTile = startTile;
+        this.endTile = endTile;
+        this.startTile.nextTile = this.endTile;
+        this.startTile.prevTile = null;
+        this.endTile.nextTile = null;
+        this.endTile.prevTile = this.startTile;
+      }
+    }
+
+    var tileMapArray;	//hexTileMap
+    var HEIGHT_SIZE = 0;
+    var WIDTH_SIZE = 0;
+    var waterAwayMap;
+    var maxMtHeight = 0;
+    var path;
+
+    //기초 맵 생성
+    function setMap(){
+      tileMapArray = Array.from(Array(WIDTH_SIZE), () => Array(HEIGHT_SIZE).fill(null));
+      var x_center = Math.round(WIDTH_SIZE / 2);
+      var y_center = Math.round(HEIGHT_SIZE / 2);
+
+      //기본 맵 설정
+      for(var x = 0; x < tileMapArray.length; x++){
+        for(var y = 0; y < tileMapArray[x].length; y++){
+          tileMapArray[x][y] = new HexTile(Math.floor(Math.random() * 16) + 1, x, y);
+        }
+      }
+
+      var xMax = WIDTH_SIZE - 1;
+      var yMax = HEIGHT_SIZE - 1;
+
+      //이웃 CELL 링크
+      for(var x = 0; x < tileMapArray.length; x++){
+        for(var y = 0; y < tileMapArray[x].length; y++){
+          var hasLeftTopBoundary = x == 0 || (y == 0 && x % 2 == 0) ? true : false;
+          var hasTopBoundary = y == 0 ? true : false;
+          var hasRightTopBoundary = x == xMax || (y == 0 && x % 2 == 0) ? true : false;
+          var hasLeftBottomBoundary = x == 0 || (y == yMax && x % 2 == 1) ? true : false;
+          var hasBottomBoundary = y == yMax ? true : false;
+          var hasRightBottomBoundary = x == xMax || (y == yMax && x % 2 == 1) ? true : false;
+
+          if(x % 2 == 0){
+            if(!hasLeftTopBoundary)		tileMapArray[x][y].leftTop		= tileMapArray[x - 1][y - 1];
+            if(!hasRightTopBoundary)	tileMapArray[x][y].rightTop		= tileMapArray[x + 1][y - 1];
+            if(!hasLeftBottomBoundary)	tileMapArray[x][y].leftBottom	= tileMapArray[x - 1][y];
+            if(!hasRightBottomBoundary)	tileMapArray[x][y].rightBottom	= tileMapArray[x + 1][y];
+          }
+          else {
+            if(!hasLeftTopBoundary)		tileMapArray[x][y].leftTop		= tileMapArray[x - 1][y];
+            if(!hasRightTopBoundary)	tileMapArray[x][y].rightTop		= tileMapArray[x + 1][y];
+            if(!hasLeftBottomBoundary)	tileMapArray[x][y].leftBottom	= tileMapArray[x - 1][y + 1];
+            if(!hasRightBottomBoundary)	tileMapArray[x][y].rightBottom	= tileMapArray[x + 1][y + 1];
+          }
+
+          if(!hasTopBoundary)				tileMapArray[x][y].top			= tileMapArray[x][y - 1];
+          if(!hasBottomBoundary)			tileMapArray[x][y].bottom		= tileMapArray[x][y + 1];
+        }
+      }
+    }
+
+    function createPath(){
+      var startX = Math.floor(Math.random() * HEIGHT_SIZE);
+      var startY = Math.floor(Math.random() * WIDTH_SIZE);
+      var endX = Math.floor(Math.random() * HEIGHT_SIZE);
+      var endY = Math.floor(Math.random() * WIDTH_SIZE);
+      path = new Path(tileMapArray[startX][startY], tileMapArray[endX][endY]);
+
+
+      var tmpX1 = Math.floor(Math.random() * HEIGHT_SIZE);
+      var tmpY1 = Math.floor(Math.random() * WIDTH_SIZE);
+
+      var tmpTile1 = tileMapArray[tmpX1][tmpY1];
+      path.startTile.nextTile = tmpTile1;
+      path.endTile.prevTile = tmpTile1;
+      tmpTile1.nextTile = path.endTile;
+      tmpTile1.prevTile = path.startTile;
+
+      var tmpX2 = Math.floor(Math.random() * HEIGHT_SIZE);
+      var tmpY2 = Math.floor(Math.random() * WIDTH_SIZE);
+
+      var tmpTile2 = tileMapArray[tmpX2][tmpY2];
+      tmpTile1.nextTile = tmpTile2;
+      tmpTile2.nextTile = path.endTile;
+      tmpTile2.prevTile = tmpTile1;
+      path.endTile.prevTile = tmpTile2;
+
+      var tmpX3 = Math.floor(Math.random() * HEIGHT_SIZE);
+      var tmpY3 = Math.floor(Math.random() * WIDTH_SIZE);
+
+      var tmpTile3 = tileMapArray[tmpX3][tmpY3];
+      tmpTile2.nextTile = tmpTile3;
+      tmpTile3.nextTile = path.endTile;
+      tmpTile3.prevTile = tmpTile2;
+      path.endTile.prevTile = tmpTile3;
+
+    }
+
+
+    //전체 맵 생성, draw
+    function drawMap(height, width, r){
+      const canvas = document.getElementById("map");
+      const ctx = canvas.getContext("2d");
+
+      HEIGHT_SIZE = height;
+      WIDTH_SIZE = width;
+
+      var height = height * r;
+      var width = width * r;
+
+      setMap();	//기초 맵 생성
+
+      createPath();	//경로 셋업
+
+      //DRAWING
+      for(let y = 0; y < HEIGHT_SIZE; y++){
+        for(let x = 0; x < WIDTH_SIZE; x++){
+          drawHex(ctx, x, y, r);
+        }
+      }
+
+      drawPathSource(ctx, r);
+    }
+
+
+
+
+    function drawPathSource(ctx, r){
+      const a = 2 * Math.PI / 6;
+      /*
+      var startXPos = ((path.startTile.x + 1) * r) + (path.startTile.x * r * Math.cos(a));
+      var startYPos = ((r * 2) * Math.sin(a)) * path.startTile.y + r;
+      if(path.startTile.x % 2 != 0)startYPos += (r * Math.sin(a));
+
+      var endXPos = ((path.endTile.x + 1) * r) + (path.endTile.x * r * Math.cos(a));
+      var endYPos = ((r * 2) * Math.sin(a)) * path.endTile.y + r;
+      if(path.endTile.x % 2 != 0)endYPos += (r * Math.sin(a));
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#ff0000'
+      ctx.arc(startXPos, startYPos, r - 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#00ff00'
+      ctx.arc(endXPos, endYPos, r - 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(startXPos, startYPos);
+      ctx.lineTo(endXPos, endYPos);
+      ctx.strokeStyle = '#ffffff';
+      ctx.closePath();
+      ctx.stroke();
+      */
+
+      var drawTile = path.startTile;
+      var targetTile = path.endTile;
+      var prevTile = null;
+      var currXPos = null;
+      var currYPos = null;
+      var prevXPos = null;
+      var prevYPos = null;
+
+      while(1){
+        currXPos = ((drawTile.x + 1) * r) + (drawTile.x * r * Math.cos(a));
+        currYPos = ((r * 2) * Math.sin(a)) * drawTile.y + r;
+        if(drawTile.x % 2 != 0)currYPos += (r * Math.sin(a));
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#ff0000'
+        ctx.arc(currXPos, currYPos, r - 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.stroke();
+
+        if(prevTile != null){
+          prevXPos = ((prevTile.x + 1) * r) + (prevTile.x * r * Math.cos(a));
+          prevYPos = ((r * 2) * Math.sin(a)) * prevTile.y + r;
+          if(prevTile.x % 2 != 0)prevYPos += (r * Math.sin(a));
+
+          ctx.beginPath();
+          ctx.moveTo(prevXPos, prevYPos);
+          ctx.lineTo(currXPos, currYPos);
+          ctx.strokeStyle = '#ffffff';
+          ctx.closePath();
+          ctx.stroke();
+        }
+
+        prevTile = drawTile;
+        if(drawTile.nextTile == null)break;
+        else drawTile = drawTile.nextTile;
+      }
+    }
+
+
+    function pathFind(path){
+
+    }
+
+
+
+
+    function drawHex(ctx, x, y, r){
+      const a = 2 * Math.PI / 6;
+      var xPos = ((x + 1) * r) + (x * r * Math.cos(a));
+      var yPos = ((r * 2) * Math.sin(a)) * y + r;
+      if(x % 2 != 0)yPos += (r * Math.sin(a));
+
+      ctx.beginPath();
+      for (var i = 0; i < 6; i++) {
+        ctx.lineTo(xPos + r * Math.cos(a * i), yPos + r * Math.sin(a * i));
+      }
+      var colorCode = '#000000';
+
+      if(tileMapArray[x][y].obstacle == 1)colorCode = '#101010';
+      else if(tileMapArray[x][y].obstacle == 2)colorCode = '#181818';
+      else if(tileMapArray[x][y].obstacle == 3)colorCode = '#202020';
+      else if(tileMapArray[x][y].obstacle == 4)colorCode = '#282828';
+      else if(tileMapArray[x][y].obstacle == 5)colorCode = '#303030';
+      else if(tileMapArray[x][y].obstacle == 6)colorCode = '#383838';
+      else if(tileMapArray[x][y].obstacle == 7)colorCode = '#404040';
+      else if(tileMapArray[x][y].obstacle == 8)colorCode = '#484848';
+      else if(tileMapArray[x][y].obstacle == 9)colorCode = '#505050';
+      else if(tileMapArray[x][y].obstacle == 10)colorCode = '#585858';
+      else if(tileMapArray[x][y].obstacle == 11)colorCode = '#606060';
+      else if(tileMapArray[x][y].obstacle == 12)colorCode = '#686868';
+      else if(tileMapArray[x][y].obstacle == 13)colorCode = '#707070';
+      else if(tileMapArray[x][y].obstacle == 14)colorCode = '#787878';
+      else if(tileMapArray[x][y].obstacle == 15)colorCode = '#808080';
+
+      ctx.fillStyle = colorCode;
+      ctx.strokeStyle = '#550000';
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+
+      //ctx.fillStyle = '#000000'
+      //ctx.fillText(tileMapArray[x][y].tileCode, xPos, yPos, r);	//좌표 텍스트 표시
+    }
+
+
+
+
+
+
+
+
+
+  </script>
+  <style>
+    canvas {
+      border: 1px solid black;
+    }
+  </style>
+</head>
+<body onload="drawMap(70, 70, 10);">
+<canvas id="map" width="1200" height="1200"></canvas>
+</body>
+</html>

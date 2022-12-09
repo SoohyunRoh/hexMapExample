@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <title>Canvas tutorial</title>
+  <script>
+    var mapArr;
+    var waterAwayMap;
+    var HEIGHT_SIZE = 70;
+    var WIDTH_SIZE = 70;
+    var LAND_RATIO = 100;
+    var SURROUND_WALLS = 4
+    var REPEAT = 4;
+    var SEA_CODE_1 = 0;
+    var LAND_CODE_1 = 10;
+    var LAND_CODE_0 = 5;	//해안
+    var LAND_CODE_2 = 20;
+    var maxMtHeight = 0;
+
+    //맵 중앙으로 부터 주어진 위치 까지 거리에 비례한 끌림 값. (중앙에 가까울 수록 높은 값을 리턴함)
+    function getAttraction(x, y){
+      var x_center = Math.round(WIDTH_SIZE / 2);
+      var y_center = Math.round(HEIGHT_SIZE / 2);
+
+      //최대 거리
+      var maxDistance = Math.abs(Math.sqrt(Math.pow(x_center, 2) + Math.pow(y_center, 2)));
+
+      //중앙으로 부터 거리 비율
+      var distance = Math.abs(Math.sqrt(Math.pow(x_center - x, 2) + Math.pow(y_center - y, 2)));
+
+      return 100 - (distance / maxDistance) * 100;
+    }
+
+    //Draw a cell
+    function drawHex(ctx, x, y, r){
+      const a = 2 * Math.PI / 6;
+      var xPos;
+      var yPos;
+
+      xPos = ((x + 1) * r) + (x * r * Math.cos(a));
+      yPos = ((r * 2) * Math.sin(a)) * y + r;
+
+      if(x % 2 != 0){
+        yPos += (r * Math.sin(a));
+      }
+
+      ctx.beginPath();
+      for (var i = 0; i < 6; i++) {
+        ctx.lineTo(xPos + r * Math.cos(a * i), yPos + r * Math.sin(a * i));
+      }
+      if(mapArr[x][y] == SEA_CODE_1){	//바다
+        ctx.fillStyle = '#00AAEE';
+      }
+      else if(mapArr[x][y] == LAND_CODE_2){	//level 2 육지
+        ctx.fillStyle = '#BB9922';
+      }
+      else if(mapArr[x][y] == LAND_CODE_1){	//level 1 육지
+        ctx.fillStyle = '#CCAA33';
+      }
+      else if(mapArr[x][y] == LAND_CODE_0){	//level 0 해안선
+        ctx.fillStyle = '#EECC55';
+      }
+      else {	//기타 (오류)
+        ctx.fillStyle = '#FF4444';
+      }
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+      ctx.fillStyle = '#000000'
+
+      //ctx.fillText(x+","+y, xPos, yPos, r);	//좌표 텍스트 표시
+      /*
+      if(mapArr[x][y] == LAND_CODE_0){
+          ctx.fillText(mapArr[x][y], xPos, yPos, r);
+      }
+      */
+      //ctx.fillText(waterAwayMap[x][y], xPos, yPos, r);
+
+
+      var xMax = mapArr.length - 1;
+      var yMax = mapArr[0].length - 1;
+
+      var hasLeftTopBoundary = x == 0 || (y == 0 && x % 2 == 0) ? true : false;
+      var hasTopBoundary = y == 0 ? true : false;
+      var hasRightTopBoundary = x == xMax || (y == 0 && x % 2 == 0) ? true : false;
+      var hasLeftBottomBoundary = x == 0 || (y == yMax && x % 2 == 1) ? true : false;
+      var hasBottomBoundary = y == yMax ? true : false;
+      var hasRightBottomBoundary = x == xMax || (y == yMax && x % 2 == 1) ? true : false;
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#444444';
+
+      if(hasLeftTopBoundary) {
+        ctx.beginPath();
+        ctx.moveTo(xPos + r * Math.cos(a * 3), yPos + r * Math.sin(a * 3));
+        ctx.lineTo(xPos + r * Math.cos(a * 4), yPos + r * Math.sin(a * 4));
+        ctx.stroke();
+      }
+      if(hasTopBoundary) {
+        ctx.beginPath();
+        ctx.moveTo(xPos + r * Math.cos(a * 4), yPos + r * Math.sin(a * 4));
+        ctx.lineTo(xPos + r * Math.cos(a * 5), yPos + r * Math.sin(a * 5));
+        ctx.stroke();
+      }
+      if(hasRightTopBoundary) {
+        ctx.beginPath();
+        ctx.moveTo(xPos + r * Math.cos(a * 5), yPos + r * Math.sin(a * 5));
+        ctx.lineTo(xPos + r * Math.cos(0), yPos + r * Math.sin(0));
+        ctx.stroke();
+      }
+      if(hasRightBottomBoundary) {
+        ctx.beginPath();
+        ctx.moveTo(xPos + r * Math.cos(0), yPos + r * Math.sin(0));
+        ctx.lineTo(xPos + r * Math.cos(a), yPos + r * Math.sin(a));
+        ctx.stroke();
+      }
+      if(hasBottomBoundary) {
+        ctx.beginPath();
+        ctx.moveTo(xPos + r * Math.cos(a), yPos + r * Math.sin(a));
+        ctx.lineTo(xPos + r * Math.cos(a * 2), yPos + r * Math.sin(a * 2));
+        ctx.stroke();
+      }
+      if(hasLeftBottomBoundary) {
+        ctx.beginPath();
+        ctx.moveTo(xPos + r * Math.cos(a * 2), yPos + r * Math.sin(a * 2));
+        ctx.lineTo(xPos + r * Math.cos(a * 3), yPos + r * Math.sin(a * 3));
+        ctx.stroke();
+      }
+      ctx.lineWidth = 1;
+
+    }
+
+    //해안선 그리기
+    function setCoast(){
+      for(var x = 0; x < mapArr.length; x++){
+        for(var y = 0; y < mapArr[x].length; y++){
+          if(mapArr[x][y] == LAND_CODE_1){	//level 1에서만 확인함
+            if(getSurroundSpcTiles(x, y, 0) > 0) {
+              mapArr[x][y] = LAND_CODE_0;
+            }
+          }
+        }
+      }
+    }
+
+    function createWaterAwayMap(){
+
+      waterAwayMap = Array.from(Array(WIDTH_SIZE), () => Array(HEIGHT_SIZE).fill(0));
+
+      //해안선과 육지 카피.
+      for(var x = 0; x < mapArr.length; x++){
+        for(var y = 0; y < mapArr[x].length; y++){
+          if(mapArr[x][y] == LAND_CODE_0) waterAwayMap[x][y] = 1;
+          else if(mapArr[x][y] == LAND_CODE_1) waterAwayMap[x][y] = 9999;
+        }
+      }
+
+      var prevLevel = 2;
+      var worked = 0;
+
+      while(1){
+        worked = 0;
+        for(var x = 0; x < waterAwayMap.length; x++){
+          for(var y = 0; y < waterAwayMap[x].length; y++){
+            if(waterAwayMap[x][y] == 9999){
+              if(getSurroundTiles(x, y, prevLevel - 1, waterAwayMap) > 0) {
+                waterAwayMap[x][y] = prevLevel;
+                worked++;
+              }
+            }
+          }
+        }
+
+        if(worked > 0){
+          prevLevel ++;
+        }
+        else {
+          maxMtHeight = prevLevel;
+          break;
+        }
+      }
+
+      console.log(maxMtHeight);
+    }
+
+
+
+
+    //자신을 제외. 주변에 특정 타일 개수 확인
+    function getSurroundTiles(myX, myY, tileNumber, arr){
+      var xMax = arr.length - 1;
+      var yMax = arr[0].length - 1;
+      var sum = 0;
+
+      var hasLeftTopBoundary = myX == 0 || (myY == 0 && myX % 2 == 0) ? true : false;
+      var hasTopBoundary = myY == 0 ? true : false;
+      var hasRightTopBoundary = myX == xMax || (myY == 0 && myX % 2 == 0) ? true : false;
+      var hasLeftBottomBoundary = myX == 0 || (myY == yMax && myX % 2 == 1) ? true : false;
+      var hasBottomBoundary = myY == yMax ? true : false;
+      var hasRightBottomBoundary = myX == xMax || (myY == yMax && myX % 2 == 1) ? true : false;
+
+      if(myX % 2 == 0){
+        if(!hasLeftTopBoundary) 	sum += arr[myX - 1][myY - 1] == tileNumber ? 1 : 0;
+        if(!hasRightTopBoundary) 	sum += arr[myX + 1][myY - 1] == tileNumber ? 1 : 0;
+        if(!hasLeftBottomBoundary) 	sum += arr[myX - 1][myY] == tileNumber ? 1 : 0;
+        if(!hasRightBottomBoundary) sum += arr[myX + 1][myY] == tileNumber ? 1 : 0;
+      }
+      else {
+        if(!hasLeftTopBoundary) 	sum += arr[myX - 1][myY] == tileNumber ? 1 : 0;
+        if(!hasRightTopBoundary) 	sum += arr[myX + 1][myY] == tileNumber ? 1 : 0;
+        if(!hasLeftBottomBoundary) 	sum += arr[myX - 1][myY + 1] == tileNumber ? 1 : 0;
+        if(!hasRightBottomBoundary) sum += arr[myX + 1][myY + 1] == tileNumber ? 1 : 0;
+      }
+
+      if(!hasTopBoundary) 		sum += arr[myX][myY - 1] == tileNumber ? 1 : 0;
+      if(!hasBottomBoundary) 		sum += arr[myX][myY + 1] == tileNumber ? 1 : 0;
+
+      return sum;
+    }
+
+
+    //자신을 제외. 주변에 특정 타일 개수 확인
+    function getSurroundSpcTiles(myX, myY, tileNumber){
+      var xMax = mapArr.length - 1;
+      var yMax = mapArr[0].length - 1;
+      var sum = 0;
+
+      var hasLeftTopBoundary = myX == 0 || (myY == 0 && myX % 2 == 0) ? true : false;
+      var hasTopBoundary = myY == 0 ? true : false;
+      var hasRightTopBoundary = myX == xMax || (myY == 0 && myX % 2 == 0) ? true : false;
+      var hasLeftBottomBoundary = myX == 0 || (myY == yMax && myX % 2 == 1) ? true : false;
+      var hasBottomBoundary = myY == yMax ? true : false;
+      var hasRightBottomBoundary = myX == xMax || (myY == yMax && myX % 2 == 1) ? true : false;
+
+      if(myX % 2 == 0){
+        if(!hasLeftTopBoundary) 	sum += mapArr[myX - 1][myY - 1] == tileNumber ? 1 : 0;
+        if(!hasRightTopBoundary) 	sum += mapArr[myX + 1][myY - 1] == tileNumber ? 1 : 0;
+        if(!hasLeftBottomBoundary) 	sum += mapArr[myX - 1][myY] == tileNumber ? 1 : 0;
+        if(!hasRightBottomBoundary) sum += mapArr[myX + 1][myY] == tileNumber ? 1 : 0;
+      }
+      else {
+        if(!hasLeftTopBoundary) 	sum += mapArr[myX - 1][myY] == tileNumber ? 1 : 0;
+        if(!hasRightTopBoundary) 	sum += mapArr[myX + 1][myY] == tileNumber ? 1 : 0;
+        if(!hasLeftBottomBoundary) 	sum += mapArr[myX - 1][myY + 1] == tileNumber ? 1 : 0;
+        if(!hasRightBottomBoundary) sum += mapArr[myX + 1][myY + 1] == tileNumber ? 1 : 0;
+      }
+
+      if(!hasTopBoundary) 		sum += mapArr[myX][myY - 1] == tileNumber ? 1 : 0;
+      if(!hasBottomBoundary) 		sum += mapArr[myX][myY + 1] == tileNumber ? 1 : 0;
+
+      return sum;
+    }
+
+    //해당 좌표의 주변에 몇 개의 육지가 있는지 확인
+    //--> 지정 개수 보다 많거나 같으면 1, 아니면 0
+    function getSurround(myX, myY){
+      var sum = 0;
+      var xMax = mapArr.length - 1;
+      var yMax = mapArr[0].length - 1;
+
+      var hasLeftTopBoundary = myX == 0 || (myY == 0 && myX % 2 == 0) ? true : false;
+      var hasTopBoundary = myY == 0 ? true : false;
+      var hasRightTopBoundary = myX == xMax || (myY == 0 && myX % 2 == 0) ? true : false;
+      var hasLeftBottomBoundary = myX == 0 || (myY == yMax && myX % 2 == 1) ? true : false;
+      var hasBottomBoundary = myY == yMax ? true : false;
+      var hasRightBottomBoundary = myX == xMax || (myY == yMax && myX % 2 == 1) ? true : false;
+
+      sum += mapArr[myX][myY] > 0 ? 1 : 0;
+
+      if(myX % 2 == 0){
+        if(!hasLeftTopBoundary) 	sum += mapArr[myX - 1][myY - 1] > 0 ? 1 : 0;
+        if(!hasRightTopBoundary) 	sum += mapArr[myX + 1][myY - 1] > 0 ? 1 : 0;
+        if(!hasLeftBottomBoundary) 	sum += mapArr[myX - 1][myY] > 0 ? 1 : 0;
+        if(!hasRightBottomBoundary) sum += mapArr[myX + 1][myY] > 0 ? 1 : 0;
+      }
+      else {
+        if(!hasLeftTopBoundary) 	sum += mapArr[myX - 1][myY] > 0 ? 1 : 0;
+        if(!hasRightTopBoundary) 	sum += mapArr[myX + 1][myY] > 0 ? 1 : 0;
+        if(!hasLeftBottomBoundary) 	sum += mapArr[myX - 1][myY + 1] > 0 ? 1 : 0;
+        if(!hasRightBottomBoundary) sum += mapArr[myX + 1][myY + 1] > 0 ? 1 : 0;
+      }
+
+      if(!hasTopBoundary) 		sum += mapArr[myX][myY - 1] > 0 ? 1 : 0;
+      if(!hasBottomBoundary) 		sum += mapArr[myX][myY + 1] > 0 ? 1 : 0;
+
+      return sum >= SURROUND_WALLS ? 1 : 0;
+    }
+
+    //절차적 맵생성 - Cellular Automata
+    function mapProcessing(){
+      var tmpMapArr = Array.from(Array(WIDTH_SIZE), () => Array(HEIGHT_SIZE).fill(0));
+      for(var x = 0; x < mapArr.length; x++){
+        for(var y = 0; y < mapArr[x].length; y++){
+          tmpMapArr[x][y] = getSurround(x, y) > 0 ? LAND_CODE_1 : SEA_CODE_1;
+        }
+      }
+      mapArr = tmpMapArr;
+    }
+
+    function setMap(){
+      mapArr = Array.from(Array(WIDTH_SIZE), () => Array(HEIGHT_SIZE).fill(0));
+      for(var x = 0; x < mapArr.length; x++){
+        for(var y = 0; y < mapArr[x].length; y++){
+          if(Math.random() * 100 <= (getAttraction(x, y) / (100 / LAND_RATIO))) mapArr[x][y] = LAND_CODE_1;
+        }
+      }
+    }
+
+
+
+    function drawMap(r){
+      const canvas = document.getElementById("map");
+      const ctx = canvas.getContext("2d");
+
+      var height = HEIGHT_SIZE * r;
+      var width = WIDTH_SIZE * r;
+
+      createMap();
+
+      for(let y = 0; y < HEIGHT_SIZE; y++){
+        for(let x = 0; x < WIDTH_SIZE; x++){
+          drawHex(ctx, x, y, r);
+        }
+      }
+    }
+
+
+    function createMap(){
+      setMap();
+      for(var i = 0; i < REPEAT; i++){
+        mapProcessing();
+      }
+      setCoast();
+
+      createWaterAwayMap();
+
+      setHeightMap(LAND_CODE_1);
+
+
+    }
+
+    //setHeight
+    function setHeightMap(baseLand){
+      tmpMapArr = Array.from(Array(WIDTH_SIZE), () => Array(HEIGHT_SIZE).fill(null));
+      for(var x = 0; x < tmpMapArr.length; x++){
+        for(var y = 0; y < tmpMapArr[x].length; y++){
+          if(mapArr[x][y] == baseLand){
+            if(Math.random() * 100 <= ((waterAwayMap[x][y] / maxMtHeight) * 100)) mapArr[x][y] = LAND_CODE_2;
+          }
+        }
+      }
+
+
+    }
+
+
+
+  </script>
+  <style>
+    canvas {
+      border: 1px solid black;
+    }
+  </style>
+</head>
+<body onload="drawMap(8);">
+<canvas id="map" width="1000" height="1000"></canvas>
+</body>
+</html>
