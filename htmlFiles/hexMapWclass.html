@@ -337,21 +337,21 @@
         }
       }
 
-      tileMapArray[x][y].
+      //tileMapArray[x][y].
     }
 
 
 
     //전체 맵 생성, draw
-    function drawMap(height, width, r){
+    function drawMap(pHeight, pWidth, r){
       const canvas = document.getElementById("map");
       const ctx = canvas.getContext("2d");
 
-      HEIGHT_SIZE = height;
-      WIDTH_SIZE = width;
+      HEIGHT_SIZE = pHeight;
+      WIDTH_SIZE = pWidth;
 
-      let height = height * r;
-      let width = width * r;
+      //let height = HEIGHT_SIZE * r;
+      //let width = WIDTH_SIZE * r;
 
       setMap();	//기초 맵 생성
 
